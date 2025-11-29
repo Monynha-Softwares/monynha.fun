@@ -12,6 +12,12 @@ interface SignUpParams extends SignInParams {
   displayName?: string;
 }
 
+interface UpdateProfileParams {
+  display_name?: string | null;
+  bio?: string | null;
+  avatar_url?: string | null;
+}
+
 interface AuthContextValue {
   user: User | null;
   profile: Tables<"profiles"> | null;
@@ -19,6 +25,7 @@ interface AuthContextValue {
   signIn: (params: SignInParams) => Promise<void>;
   signUp: (params: SignUpParams) => Promise<void>;
   signOut: () => Promise<void>;
+  updateProfile: (params: UpdateProfileParams) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -151,6 +158,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const updateProfile = async (params: UpdateProfileParams) => {
+    if (!user) {
+      throw new Error("User not authenticated.");
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(params)
+      .eq("user_id", user.id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      setProfile(data);
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -159,6 +187,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       signIn,
       signUp,
       signOut,
+      updateProfile,
     }),
     [loading, profile, user]
   );

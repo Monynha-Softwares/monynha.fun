@@ -1,8 +1,19 @@
 import { useState } from "react";
-import { Search, Menu, Plus, Zap, User, Heart } from "lucide-react";
+import { Search, Menu, Plus, Zap, User, Heart, LogOut, Settings, Video, User as UserIconLucide } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useAuth } from "@/hooks/use-auth";
+import { Link, useNavigate } from "react-router-dom";
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -13,6 +24,8 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle, onSearch, onSubmitVideo, totalVotes = 0 }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const { user, profile, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const formattedVotes = new Intl.NumberFormat("pt-BR").format(totalVotes);
 
@@ -27,6 +40,16 @@ export function Header({ onMenuToggle, onSearch, onSubmitVideo, totalVotes = 0 }
     e.preventDefault();
     if (onSearch) {
       onSearch(searchQuery);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate("/login");
+    } catch (error) {
+      console.error("Failed to log out:", error);
+      // Optionally show a toast error
     }
   };
 
@@ -45,7 +68,7 @@ export function Header({ onMenuToggle, onSearch, onSubmitVideo, totalVotes = 0 }
               <Menu className="w-6 h-6" />
             </Button>
             
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <div className="text-2xl font-bold bg-gradient-rainbow bg-clip-text text-transparent animate-neon-pulse">
                 Monynha Fun
               </div>
@@ -53,7 +76,7 @@ export function Header({ onMenuToggle, onSearch, onSubmitVideo, totalVotes = 0 }
                 <Zap className="w-3 h-3" />
                 Beta
               </Badge>
-            </div>
+            </Link>
           </div>
 
           {/* Search */}
@@ -84,10 +107,53 @@ export function Header({ onMenuToggle, onSearch, onSubmitVideo, totalVotes = 0 }
               <span className="hidden sm:inline">Submeter</span>
             </Button>
 
-            {/* User */}
-            <Button variant="ghost" size="icon">
-              <User className="w-5 h-5" />
-            </Button>
+            {/* User Menu */}
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="relative">
+                    <Avatar className="h-8 w-8 border border-primary">
+                      <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name ?? "User Avatar"} />
+                      <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+                        {profile?.display_name ? profile.display_name[0].toUpperCase() : <UserIconLucide className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{profile?.display_name || "Usuário"}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user.email}
+                      </p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/profile")}>
+                    <UserIconLucide className="mr-2 h-4 w-4" />
+                    <span>Perfil</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/my-videos")}> {/* Placeholder route */}
+                    <Video className="mr-2 h-4 w-4" />
+                    <span>Meus Vídeos</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/settings")}> {/* Placeholder route */}
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Configurações</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sair</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button variant="ghost" size="icon" onClick={() => navigate("/login")}>
+                <User className="w-5 h-5" />
+              </Button>
+            )}
           </div>
         </div>
 
