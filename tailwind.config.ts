@@ -112,11 +112,11 @@ export default {
 				},
 				'neon-pulse': {
 					'0%, 100%': { 
-						boxShadow: 'var(--neon-glow)',
+						filter: 'drop-shadow(0 0 15px hsl(var(--primary) / 0.6)) drop-shadow(0 0 30px hsl(var(--primary) / 0.4))',
 						filter: 'brightness(1)'
 					},
 					'50%': { 
-						boxShadow: '0 0 40px hsl(var(--primary) / 0.8), 0 0 80px hsl(var(--primary) / 0.6)',
+						filter: 'drop-shadow(0 0 20px hsl(var(--primary) / 0.8)) drop-shadow(0 0 40px hsl(var(--primary) / 0.6))',
 						filter: 'brightness(1.2)'
 					}
 				},
