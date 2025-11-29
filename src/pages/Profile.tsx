@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
@@ -11,7 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { User as UserIconLucide } from "lucide-react";
+import { User as UserIconLucide, UploadCloud } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const profileFormSchema = z.object({
   display_name: z.string().min(2, "O nome de exibição deve ter pelo menos 2 caracteres").max(50, "O nome de exibição não pode ter mais de 50 caracteres").nullable(),
@@ -24,6 +25,8 @@ const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.infer<typeof profileFormSchema>>({
     resolver: zodResolver(profileFormSchema),
@@ -71,6 +74,63 @@ const Profile = () => {
     }
   };
 
+  const handleAvatarFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) {
+      toast({
+        title: "Login necessário",
+        description: "Você precisa estar logado para fazer upload de um avatar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}.${fileExt}`; // Store in user's folder
+      const { data, error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      if (publicUrlData.publicUrl) {
+        form.setValue("avatar_url", publicUrlData.publicUrl);
+        await updateProfile({ avatar_url: publicUrlData.publicUrl });
+        toast({
+          title: "Avatar atualizado!",
+          description: "Sua imagem de perfil foi atualizada com sucesso.",
+        });
+      } else {
+        throw new Error("Não foi possível obter a URL pública do avatar.");
+      }
+    } catch (error: any) {
+      console.error("Failed to upload avatar:", error);
+      toast({
+        title: "Erro ao fazer upload do avatar",
+        description: error.message ?? "Não foi possível fazer upload da imagem. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingAvatar(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''; // Clear the file input
+      }
+    }
+  };
+
   if (loading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -83,12 +143,35 @@ const Profile = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted to-background px-4 py-10">
       <Card className="w-full max-w-2xl shadow-2xl">
         <CardHeader className="flex flex-col items-center text-center">
-          <Avatar className="h-24 w-24 mb-4 border-2 border-primary">
-            <AvatarImage src={profile?.avatar_url ?? undefined} alt={profile?.display_name ?? "User Avatar"} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-4xl font-bold">
-              {profile?.display_name ? profile.display_name[0].toUpperCase() : <UserIconLucide className="h-12 w-12" />}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative group mb-4">
+            <Avatar className="h-24 w-24 border-2 border-primary">
+              <AvatarImage src={form.watch("avatar_url") ?? undefined} alt={profile?.display_name ?? "User Avatar"} />
+              <AvatarFallback className="bg-primary text-primary-foreground text-4xl font-bold">
+                {profile?.display_name ? profile.display_name[0].toUpperCase() : <UserIconLucide className="h-12 w-12" />}
+              </AvatarFallback>
+            </Avatar>
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              onChange={handleAvatarFileChange}
+              className="hidden"
+              disabled={isUploadingAvatar}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/50 rounded-full"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploadingAvatar}
+            >
+              {isUploadingAvatar ? (
+                <span className="animate-spin text-white">🌀</span>
+              ) : (
+                <UploadCloud className="h-6 w-6 text-white" />
+              )}
+            </Button>
+          </div>
           <CardTitle className="text-3xl font-bold">{profile?.display_name || "Seu Perfil"}</CardTitle>
           <CardDescription className="text-lg text-muted-foreground">
             Gerencie suas informações de perfil.
@@ -132,7 +215,7 @@ const Profile = () => {
                   <FormItem>
                     <FormLabel>URL do Avatar (opcional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="https://exemplo.com/seu-avatar.jpg" {...field} value={field.value ?? ""} />
+                      <Input placeholder="https://exemplo.com/seu-avatar.jpg" {...field} value={field.value ?? ""} disabled={isUploadingAvatar} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -140,10 +223,10 @@ const Profile = () => {
               />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+              <Button type="submit" className="w-full" disabled={isSubmitting || isUploadingAvatar}>
                 {isSubmitting ? "Salvando..." : "Salvar Alterações"}
               </Button>
-              <Button variant="outline" className="w-full" onClick={() => signOut()} disabled={isSubmitting}>
+              <Button variant="outline" className="w-full" onClick={() => signOut()} disabled={isSubmitting || isUploadingAvatar}>
                 Sair
               </Button>
             </CardFooter>
